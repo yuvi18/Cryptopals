@@ -48,6 +48,8 @@ for encoded in fileinput.input(files='6.txt'):
 
 encodedBytes = base64.b64decode(base64Encoded)
 
+#encodedBytes = bytearray.fromhex("3c0804390c0b1415571d321307083807080b0332081a1938000b381602124e10")
+
 minimumEditDistance = 500
 testKEYSIZE = 0
 keysize_distances = {}

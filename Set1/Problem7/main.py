@@ -1,14 +1,13 @@
 import base64
-import fileinput
 from Crypto.Cipher import AES
 
-for encoded in fileinput.input(files='7.txt'):
-    byteEncoded += encoded
+file = open("7.txt", "r")
+encoded = file.read()
 
-byteEncoded = base64.b64decode(byteEncoded)
-key = b"YELLOW SUBMARINE"
+theBytes = base64.b64decode(encoded)
 
-cipher = AES.new(key, AES.MODE_ECB)
-plaintext = cipher.decrypt(byteEncoded)
+cipher = AES.new(b"YELLOW SUBMARINE", AES.MODE_ECB)
 
-print(plaintext.decode('utf-8'))
+answer = cipher.decrypt(theBytes)
+
+print(answer.decode('utf-8'))
