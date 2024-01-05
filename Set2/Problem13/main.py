@@ -62,3 +62,12 @@ emailPrefix = b"email="
 emailPadding = b"A" * (blockSize - len(emailPrefix))
 emailAdmin = addpadding(b"admin", blockSize)
 adminEncryptedBlock = ecbOracle(emailPadding + emailAdmin)[blockSize: 2 * blockSize]
+
+# Step 2:
+profileMinusRole = ecbOracle(b"fake@fake.com")[:-blockSize]
+
+# Step 3:
+adminProfile = profileMinusRole + adminEncryptedBlock
+
+# Step 4:
+print(decryptProfile(adminProfile))
