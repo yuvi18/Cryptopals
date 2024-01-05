@@ -8,8 +8,14 @@ def addpadding(byteString, length):
     currentAmount = len(byteString)
     padding = byteString
     if currentAmount % length != 0:
-        padding = b"" + byteString + (length - currentAmount % length) * b"\x04"
+        padding = b"" + byteString + \
+                  (length - (currentAmount % length)) * (length - (currentAmount % length)).to_bytes(1, "little")
     return padding
+
+
+def removepadding(byteString):
+    paddingAmt = int(byteString[-1])
+    return byteString[:-paddingAmt]
 
 
 def detect_ecb(detectionText):
@@ -107,7 +113,6 @@ def decode_ecb(blocksize, theOracle):
                 if target == encoded:
                     block = block + i.to_bytes(1, "big")
                     break
-
         answer += block
 
     return answer
@@ -115,4 +120,4 @@ def decode_ecb(blocksize, theOracle):
 
 decodedBytes = decode_ecb(theBlocksize, ecbOracle)
 
-print(decodedBytes.decode('utf-8'))
+print(removepadding(decodedBytes).decode())
