@@ -17,20 +17,6 @@ def removepadding(byteString):
     return byteString[:-paddingAmt]
 
 
-def detect_ecb(detectionText):
-    cipherBlocks = set()
-    iterations = len(detectionText) // 16
-    usedECB = False
-    for k in range(iterations):
-        block = detectionText[16 * k:16 * k + 16]
-        if block in cipherBlocks:
-            usedECB = True
-        else:
-            cipherBlocks.add(block)
-
-    return usedECB
-
-
 def kVParse(orig):
     interim = orig.split("&")
     output = {}
@@ -41,64 +27,19 @@ def kVParse(orig):
 
 
 def profile_for(email):
-    email = email.replace("&", "")
-    email = email.replace("=", "")
-    return "email=" + email + "&uid=10&role=user"
-
-
-def findBlocksize(oracle):
-    i = 1
-    prevLength = -1
-    blockSize = -1
-    second = False
-    while True:
-        test = "A" * i
-        newLength = len(oracle(test.encode('utf-8')))
-        if prevLength != newLength and prevLength != -1:
-            if second:
-                blockSize = i - blockSize
-                break
-            blockSize = i
-            second = True
-        prevLength = newLength
-        i += 1
-
-    return blockSize
-
-
-# Crack ECB
-
-def decode_ecb(blocksize, theOracle):
-    answer = b""
-    blocks = len(theOracle(b"")) // blocksize
-    for blockNum in range(0, blocks):
-        block = b""
-        for byteIndex in range(1, blocksize + 1):
-            if blockNum == 0:
-                baseBytes = b"A" * (blocksize - byteIndex)
-            else:
-                baseBytes = answer[(blockNum - 1) * 16: blockNum * 16][byteIndex:16]
-            dummyBytes = baseBytes
-            target = theOracle(dummyBytes)[blockNum * 16: (blockNum + 1) * 16]
-            for i in range(0, 256):
-                newBytes = baseBytes + block + i.to_bytes(1, "big")
-                encoded = theOracle(newBytes)[0:16]
-                if target == encoded:
-                    block = block + i.to_bytes(1, "big")
-                    break
-
-        answer += block
-
-    return answer
+    email = email.replace(b"&", b"")
+    email = email.replace(b"=", b"")
+    return b"email=" + email + b"&uid=10&role=user"
 
 
 randomKey = os.urandom(16)
+blockSize = 16
 
 
 def ecbOracle(userEmail):
     cipher = AES.new(randomKey, AES.MODE_ECB)
-    finalPlaintext = profile_for(userEmail).encode()
-    finalPlaintext = addpadding(finalPlaintext, 16)
+    finalPlaintext = profile_for(userEmail)
+    finalPlaintext = addpadding(finalPlaintext, blockSize)
     finalCiphertext = bytearray(cipher.encrypt(finalPlaintext))
     return finalCiphertext
 
@@ -110,9 +51,14 @@ def decryptProfile(encrypted):
     return kVParse(noPadding.decode())
 
 
-testEmail = "whoami@yahoo.com"
+# Can't set email to the admin profile string and use ECB's property since our profile encoder removes encoding strings.
+# Step 1: Figure out how to write admin + padding in cipher text
+# Step 2: Get everything up until role= as cipher text with some arbitrary email aligned on 16 byte padding.
+# Step 3: Add step1's cipher text to the end of step2's cipher text.
+# Step 4: Decrypt profile (and profit!)
 
-testEncrypted = ecbOracle(testEmail)
-print(testEncrypted)
-testProfile = decryptProfile(testEncrypted)
-print(testProfile)
+# Step 1
+emailPrefix = b"email="
+emailPadding = b"A" * (blockSize - len(emailPrefix))
+emailAdmin = addpadding(b"admin", blockSize)
+adminEncryptedBlock = ecbOracle(emailPadding + emailAdmin)[blockSize: 2 * blockSize]
