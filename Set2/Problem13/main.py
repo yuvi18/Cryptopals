@@ -1,4 +1,3 @@
-import base64
 import os
 
 from Crypto.Cipher import AES
@@ -8,8 +7,14 @@ def addpadding(byteString, length):
     currentAmount = len(byteString)
     padding = byteString
     if currentAmount % length != 0:
-        padding = b"" + byteString + (length - currentAmount % length) * b"\x04"
+        padding = b"" + byteString + \
+                  (length - (currentAmount % length)) * (length - (currentAmount % length)).to_bytes(1, "little")
     return padding
+
+
+def removepadding(byteString):
+    paddingAmt = int(byteString[-1])
+    return byteString[:-paddingAmt]
 
 
 def detect_ecb(detectionText):
@@ -26,43 +31,29 @@ def detect_ecb(detectionText):
     return usedECB
 
 
-randomKey = os.urandom(16)
-
-unknown = "Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkgaGFpciBjYW4gYmxvdwpUaGUgZ2lyb" \
-          "GllcyBvbiBzdGFuZGJ5IHdhdmluZyBqdXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUgYnkK "
-
-
-def ecbOracle(regularByteString):
-    cipher = AES.new(randomKey, AES.MODE_ECB)
-
-    finalPlaintext = regularByteString + base64.b64decode(unknown)
-    finalPlaintext = addpadding(finalPlaintext, 16)
-
-    finalCiphertext = bytearray(cipher.encrypt(finalPlaintext))
-
-    return finalCiphertext
+def kVParse(orig):
+    interim = orig.split("&")
+    output = {}
+    for i in interim:
+        kV = i.split("=")
+        output[kV[0]] = kV[1]
+    return output
 
 
-# Oracle that I know for debugging
-def ecbOracle2(regularByteString):
-    cipher = AES.new(randomKey, AES.MODE_ECB)
-
-    finalPlaintext = regularByteString + b"Hey there! This is the text I am trying to obtain."
-    finalPlaintext = addpadding(finalPlaintext, 16)
-
-    finalCiphertext = bytearray(cipher.encrypt(finalPlaintext))
-
-    return finalCiphertext
+def profile_for(email):
+    email = email.replace("&", "")
+    email = email.replace("=", "")
+    return "email=" + email + "&uid=10&role=user"
 
 
-def findBlocksize():
+def findBlocksize(oracle):
     i = 1
     prevLength = -1
     blockSize = -1
     second = False
     while True:
         test = "A" * i
-        newLength = len(ecbOracle(test.encode('utf-8')))
+        newLength = len(oracle(test.encode('utf-8')))
         if prevLength != newLength and prevLength != -1:
             if second:
                 blockSize = i - blockSize
@@ -73,18 +64,6 @@ def findBlocksize():
         i += 1
 
     return blockSize
-
-
-# Discover Blocksize
-theBlocksize = findBlocksize()
-
-# Detect ECB
-testString = "A" * theBlocksize * 2
-
-if detect_ecb(bytes(ecbOracle(testString.encode('utf-8')))):
-    print("Oracle uses ECB! Let's go!")
-else:
-    print("Uh oh, Oracle doesn't use ECB!")
 
 
 # Crack ECB
@@ -113,6 +92,27 @@ def decode_ecb(blocksize, theOracle):
     return answer
 
 
-decodedBytes = decode_ecb(theBlocksize, ecbOracle)
+randomKey = os.urandom(16)
 
-print(decodedBytes.decode('utf-8'))
+
+def ecbOracle(userEmail):
+    cipher = AES.new(randomKey, AES.MODE_ECB)
+    finalPlaintext = profile_for(userEmail).encode()
+    finalPlaintext = addpadding(finalPlaintext, 16)
+    finalCiphertext = bytearray(cipher.encrypt(finalPlaintext))
+    return finalCiphertext
+
+
+def decryptProfile(encrypted):
+    cipher = AES.new(randomKey, AES.MODE_ECB)
+    profilePlaintext = bytearray(cipher.decrypt(encrypted))
+    noPadding = removepadding(profilePlaintext)
+    return kVParse(noPadding.decode())
+
+
+testEmail = "whoami@yahoo.com"
+
+testEncrypted = ecbOracle(testEmail)
+print(testEncrypted)
+testProfile = decryptProfile(testEncrypted)
+print(testProfile)
